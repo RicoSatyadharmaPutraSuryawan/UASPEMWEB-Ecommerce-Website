@@ -1,84 +1,50 @@
 <?php
-include 'db.php';
+require_once __DIR__ . '/includes/functions.php';
 
-$sql = "SELECT * FROM produk";
-$result = $conn->query($sql);
+$q = trim($_GET['q'] ?? '');
+$sort = $_GET['sort'] ?? 'terbaru';
+$orderBy = [
+    'terbaru' => 'created_at DESC, id DESC',
+    'termurah' => 'harga_produk ASC',
+    'termahal' => 'harga_produk DESC',
+    'nama' => 'nama_produk ASC',
+][$sort] ?? 'created_at DESC, id DESC';
+
+if ($q !== '') {
+    $stmt = $conn->prepare("SELECT * FROM produk WHERE nama_produk LIKE ? OR deskripsi_produk LIKE ? ORDER BY $orderBy");
+    $like = '%' . $q . '%';
+    $stmt->bind_param('ss', $like, $like);
+    $stmt->execute();
+    $products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+} else {
+    $products = $conn->query("SELECT * FROM produk ORDER BY $orderBy")->fetch_all(MYSQLI_ASSOC);
+}
+
+$pageTitle = 'Produk';
+$activePage = 'produk';
+require __DIR__ . '/includes/header.php';
 ?>
+<div class="container">
+  <h1 class="page-title">Semua Produk</h1>
+  <p class="page-subtitle"><?= count($products) ?> produk<?= $q !== '' ? ' untuk "' . e($q) . '"' : '' ?></p>
 
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Produk Toko</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="styleproduct.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
-</head>
-<body>
+  <form class="toolbar" method="get">
+    <input class="form-control" type="search" name="q" value="<?= e($q) ?>" placeholder="Cari produk, misalnya jaket atau hoodie">
+    <select class="form-control" name="sort" onchange="this.form.submit()">
+      <option value="terbaru" <?= $sort === 'terbaru' ? 'selected' : '' ?>>Terbaru</option>
+      <option value="termurah" <?= $sort === 'termurah' ? 'selected' : '' ?>>Harga termurah</option>
+      <option value="termahal" <?= $sort === 'termahal' ? 'selected' : '' ?>>Harga termahal</option>
+      <option value="nama" <?= $sort === 'nama' ? 'selected' : '' ?>>Nama A-Z</option>
+    </select>
+    <button class="btn" type="submit"><i class="fas fa-search"></i> Cari</button>
+  </form>
 
-    <!-- Navbar -->
-    <nav class="navbar">
-      <div class="navbar-container">
-        <ul class="navbar-nav">
-          <li><a href="index.php">Home</a></li>
-        </ul>
-
-        <a href="#" class="navbar-logo">
-          <img src="aset-gambar/DRIPTIQUE.svg" alt="Logo" />
-        </a>
-
-        <ul class="navbar-nav">
-          <li><a href="feedback_form.php">Feedback</a></li>
-        </ul>
-
-        <span class="material-symbols-outlined menu-icon" onclick="toggleMenu()">menu</span>
-      </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="hero-produk">
-        <div class="hero-produk-brand">
-            <a href=""><img src="aset-gambar/carhartt.png" alt="" /></a>
-            <a href=""><img src="aset-gambar/stussy.png" alt="" /></a>
-            <a href=""><img src="aset-gambar/tnf.png" alt="" /></a>
-            <a href=""><img src="aset-gambar/polo.png" alt="" /></a>
-        </div>
-    </section>
-    <hr class="divider" />
-    
-    <div class="kontent-title">
-        <h1>ALL PRODUCT</h1>
+  <?php if ($products): ?>
+    <div class="product-grid">
+      <?php foreach ($products as $p) include __DIR__ . '/includes/product_card.php'; ?>
     </div>
-
-    <!-- Produk List -->
-    <div class="container mt-5">
-        <div class="row">
-            <?php while ($product = $result->fetch_assoc()): ?>
-                <div class="col-md-4 mb-4">
-                    <div class="card">
-                        <img src="images/<?= $product['gambar_produk'] ?>" class="card-img-top" alt="<?= $product['nama_produk'] ?>">
-                        <div class="card-body">
-                            <h5 class="card-title"><?= $product['nama_produk'] ?></h5>
-                            <p class="card-text"><?= substr($product['deskripsi_produk'], 0, 100) . '...' ?></p>
-                            <p class="card-text"><strong>Harga: Rp<?= number_format($product['harga_produk'], 2) ?></strong></p>
-                            <p class="card-text"><strong>Stok: <?= $product['stok_produk'] ?></strong></p>
-                            <a href="product_detail.php?id=<?= $product['id'] ?>" class="btn btn-primary btn-block">Lihat Detail</a>
-                        </div>
-                    </div>
-                </div>
-            <?php endwhile; ?>
-        </div>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
-    <script>
-      function toggleMenu() {
-        document.querySelector(".navbar-nav").classList.toggle("show");
-      }
-    </script>
-</body>
-</html>
+  <?php else: ?>
+    <div class="empty"><i class="fas fa-box-open"></i>Produk tidak ditemukan.</div>
+  <?php endif; ?>
+</div>
+<?php require __DIR__ . '/includes/footer.php'; ?>

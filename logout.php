@@ -1,9 +1,7 @@
 <?php
-session_start(); // Start the session
-session_unset(); // Remove all session variables
-session_destroy(); // Destroy the session
+require_once __DIR__ . '/includes/functions.php';
 
-// Redirect to login page
-header('Location: loginadmin.php');
-exit();
-?>
+unset($_SESSION['user']);
+session_regenerate_id(true);
+flash('info', 'Kamu sudah logout.');
+redirect('index.php');

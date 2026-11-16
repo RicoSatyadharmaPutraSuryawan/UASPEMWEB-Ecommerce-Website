@@ -1,220 +1,74 @@
 <?php
-// Koneksi ke database
-$conn = new mysqli("localhost", "root", "", "db_uas");
+require_once __DIR__ . '/includes/functions.php';
 
-// Cek koneksi
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+$errors = [];
+$data = ['name' => current_user()['nama'] ?? '', 'email' => current_user()['email'] ?? '', 'feedback' => ''];
 
-// Proses form submission
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $name = $_POST["name"];
-    $email = $_POST["email"];
-    $feedback = $_POST["feedback"];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    foreach ($data as $key => $_) {
+        $data[$key] = trim($_POST[$key] ?? '');
+    }
+    if (mb_strlen($data['name']) < 2) $errors[] = 'Nama wajib diisi.';
+    if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Format email tidak valid.';
+    if (mb_strlen($data['feedback']) < 5) $errors[] = 'Feedback minimal 5 karakter.';
+    if (mb_strlen($data['feedback']) > 1000) $errors[] = 'Feedback maksimal 1000 karakter.';
 
-    // Insert feedback ke database
-    $sql = "INSERT INTO feedbacks (name, email, feedback) VALUES ('$name', '$email', '$feedback')";
-    if ($conn->query($sql) === TRUE) {
-        // Redirect ke halaman yang sama setelah sukses agar form tidak ter-submit lagi saat refresh
-        header("Location: " . $_SERVER['PHP_SELF']);
-        exit();
-    } else {
-        echo "<p class='error'>Error: " . $sql . "<br>" . $conn->error . "</p>";
+    if (!$errors) {
+        $stmt = $conn->prepare('INSERT INTO feedbacks (name, email, feedback) VALUES (?, ?, ?)');
+        $stmt->bind_param('sss', $data['name'], $data['email'], $data['feedback']);
+        $stmt->execute();
+        flash('success', 'Terima kasih! Feedback kamu sudah terkirim.');
+        redirect('feedback_form.php');
     }
 }
 
-// Ambil data feedback
-$result = $conn->query("SELECT * FROM feedbacks");
+// Ambil feedback beserta balasan admin dalam satu query
+$rows = $conn->query('SELECT f.id, f.name, f.feedback, f.created_at, r.reply, r.created_at AS replied_at
+                      FROM feedbacks f LEFT JOIN admin_replies r ON r.feedback_id = f.id
+                      ORDER BY f.created_at DESC, f.id DESC, r.id ASC');
+$feedbacks = [];
+foreach ($rows as $row) {
+    $feedbacks[$row['id']] ??= $row + ['replies' => []];
+    if ($row['reply'] !== null) $feedbacks[$row['id']]['replies'][] = $row['reply'];
+}
 
-$conn->close();
+$pageTitle = 'Feedback';
+$activePage = 'feedback';
+require __DIR__ . '/includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="id">
-  <head>
-    <style>
+<div class="container container-mid">
+  <h1 class="page-title">Feedback</h1>
+  <p class="page-subtitle">Kritik dan saran kamu membantu kami jadi lebih baik.</p>
 
-        .container {
-            width: 50%;
-            margin: 50px auto;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+  <form method="post" class="card-form">
+    <?= csrf_field() ?>
+    <?php if ($errors): ?>
+      <div class="alert alert-danger"><ul><?php foreach ($errors as $err): ?><li><?= e($err) ?></li><?php endforeach; ?></ul></div>
+    <?php endif; ?>
+    <div class="form-group"><label for="name">Nama</label>
+      <input class="form-control" id="name" name="name" value="<?= e($data['name']) ?>" required></div>
+    <div class="form-group"><label for="email">Email</label>
+      <input class="form-control" type="email" id="email" name="email" value="<?= e($data['email']) ?>" required></div>
+    <div class="form-group"><label for="feedback">Pesan</label>
+      <textarea class="form-control" id="feedback" name="feedback" maxlength="1000" required><?= e($data['feedback']) ?></textarea></div>
+    <button class="btn btn-block" type="submit">Kirim Feedback</button>
+  </form>
 
-        h2 {
-            text-align: center;
-            color: #333;
-        }
-
-        label {
-            font-size: 14px;
-            color: #555;
-            margin-bottom: 5px;
-            display: block;
-        }
-
-        input[type="text"], input[type="email"], textarea {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
-
-        input[type="submit"] {
-            background-color: #1f1f3a;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 100%;
-        }
-
-        input[type="submit"]:hover {
-            background-color: #003366;
-        }
-
-        .success {
-            color: green;
-            text-align: center;
-            font-size: 16px;
-        }
-
-        .error {
-            color: red;
-            text-align: center;
-            font-size: 16px;
-        }
-
-        h2 {
-            text-align: center;
-            color: #333;
-        }
-
-        .feedback-item {
-            border-bottom: 1px solid #ccc;
-            padding: 15px 0;
-            margin-bottom: 20px;
-        }
-
-        .feedback-item h3 {
-            margin: 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .feedback-item p {
-            margin: 10px 0;
-            color: #555;
-        }
-
-        .admin-reply {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-
-        .admin-reply h4 {
-            margin: 0;
-            font-size: 14px;
-            color: #333;
-        }
-
-        .admin-reply p {
-            color: #555;
-        }
-    </style>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Feedback - Thrift Shop</title>
-    <link rel="stylesheet" href="stylefeedback.css" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-    />
-  </head>
-  <body>
-    <nav class="navbar">
-      <div class="navbar-container">
-        <ul class="navbar-nav">
-          <li><a href="index.php">Home</a></li>
-          <li><a href="product_list.php">Produk</a></li>
-        </ul>
-
-        <a href="index.php" class="navbar-logo"
-          ><img src="aset-gambar/DRIPTIQUE.svg" alt=""
-        /></a>
-
-        <ul class="navbar-nav">
-        </ul>
-        <span class="material-symbols-outlined menu-icon" onclick="toggleMenu()"
-          >menu</span
-        >
-      </div>
-    </nav>
-
-    <div class="container">
-        <h2>Feedback Form</h2>
-        <form method="POST" action="feedback_form.php">
-            <label for="name">Name:</label>
-            <input type="text" id="name" name="name" required>
-
-            <label for="email">Email:</label>
-            <input type="email" id="email" name="email" required>
-
-            <label for="feedback">Feedback:</label>
-            <textarea id="feedback" name="feedback" required></textarea>
-
-            <input type="submit" value="Submit">
-        </form>
-    </div>
-
-    <div class="container">
-    <h2>Admin Replies</h2>
-
-    <?php while ($row = $result->fetch_assoc()) { ?>
+  <hr class="divider">
+  <h2 class="page-title">Feedback Pelanggan</h2>
+  <div class="feedback-list mt-2">
+    <?php if (!$feedbacks): ?><p class="text-muted">Belum ada feedback.</p><?php endif; ?>
+    <?php foreach ($feedbacks as $f): ?>
       <div class="feedback-item">
-        <h3>Feedback from: <?php echo $row['name']; ?> (<?php echo $row['email']; ?>)</h3>
-        <p><?php echo nl2br($row['feedback']); ?></p>
-
-        <div class="admin-reply">
-          <h4>Admin Reply:</h4>
-          <?php
-          $feedback_id = $row['id'];
-          $conn = new mysqli("localhost", "root", "PASSWORD_KAMU", "db_uas");
-          $reply_result = $conn->query("SELECT * FROM admin_replies WHERE feedback_id = $feedback_id");
-
-          if ($reply_result->num_rows > 0) {
-              $reply = $reply_result->fetch_assoc();
-              ?>
-              <p><?php echo nl2br($reply['reply']); ?></p>
-          <?php
-          } else {
-              echo "<p>No reply yet.</p>";
-          }
-          ?>
-        </div>
+        <h3><?= e($f['name']) ?></h3>
+        <time><?= e(date('d M Y', strtotime($f['created_at']))) ?></time>
+        <p><?= nl2br(e($f['feedback'])) ?></p>
+        <?php foreach ($f['replies'] as $reply): ?>
+          <div class="reply"><strong>Balasan admin:</strong><br><?= nl2br(e($reply)) ?></div>
+        <?php endforeach; ?>
       </div>
-    <?php } ?>
+    <?php endforeach; ?>
   </div>
-
-    <script src="js/script.js"></script>
-    <script>
-      function toggleMenu() {
-        document.querySelectorAll(".navbar-nav").forEach((nav) => {
-          nav.classList.toggle("show");
-        });
-      }
-    </script>
-  </body>
-</html>
+</div>
+<?php require __DIR__ . '/includes/footer.php'; ?>

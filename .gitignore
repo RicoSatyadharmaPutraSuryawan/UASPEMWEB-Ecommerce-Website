@@ -1,0 +1,12 @@
+# Konfigurasi lokal (berisi password database)
+config.php
+
+# Gambar produk hasil upload admin
+images/uploads/*
+!images/uploads/.gitkeep
+
+# File sistem
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
